@@ -1,0 +1,57 @@
+# Mapeo de claves JSON para datos de boya oceanográfica
+# ----------------------------------------------------
+# Formato: 
+# ClaveOriginal -> ClaveReducida (Factor de conversión)
+# Para obtener el valor original: valor_recibido / factor
+
+# --- Condiciones del Aire ---
+airTemp -> at (10)
+airHumidity -> ah (10)
+airPressure -> ap (10)
+
+# --- Viento ---
+windSpeed -> ws (10)
+windDirection -> wd (1)
+
+# --- Calidad del Agua ---
+waterPh -> ph (10)
+waterConductivity -> wc (1)
+waterTemp -> wt (10)
+waterOxygen -> wo (10)
+
+# --- Posicionamiento ---
+gpsLatitude -> la (100000)
+gpsLongitude -> lo (100000)
+gpsAltitude -> al (10)
+gpsSog -> sog (10)
+gpsCog -> cog (1)
+gpsSatellites -> sat (1)
+
+# --- Datos Inerciales (IMU) ---
+imuAccelX -> ax (100)
+imuAccelY -> ay (100)
+imuAccelZ -> az (100)
+imuGyroX -> gx (100)
+imuGyroY -> gy (100)
+imuGyroZ -> gz (100)
+
+# Instrucciones de uso:
+# ---------------------
+# 1. Factores numéricos:
+#    Ej: Para airTemp (at): valor_original = valor_recibido / 10
+#
+# 2. Factores especiales:
+#    - Coordenadas GPS (la/lo): 
+#        valor_original = valor_recibido / 100000
+#    - Direcciones (wd/cog): valores directos (factor 1)
+#    - Conductividad (wc) y satélites (sat): valores directos
+#
+# 3. Ejemplos prácticos:
+#    - Si se recibe: "at":253 → Temperatura real = 253 / 10 = 25.3°C
+#    - Si se recibe: "la":-3304723 → Latitud real = -3304723 / 100000 = -33.04723
+#    - Si se recibe: "ws":127 → Velocidad viento real = 127 / 10 = 12.7 m/s
+#
+# 4. Campos sin conversión:
+#    wd, wc, cog, sat → Usar valor directamente
+#
+# Nota: Este mapeo reduce el tamaño del JSON de 768 bytes a ~186 bytes
