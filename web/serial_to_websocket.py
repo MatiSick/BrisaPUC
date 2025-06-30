@@ -16,7 +16,7 @@ MONGODB_DB_NAME = "telemetria_boya"
 MONGODB_COLLECTION_NAME = "datos_sensores"
 
 # --- Configuración General ---
-USE_SIMULATED_DATA = False  # CAMBIA ESTO: True para simular, False para usar el puerto serie
+USE_SIMULATED_DATA = True  # CAMBIA ESTO: True para simular, False para usar el puerto serie
 APP_NAME = "Monitor de Boya de Telemetría"
 
 # --- Configuración HTTP Server (NUEVO/MODIFICADO) ---
@@ -145,20 +145,57 @@ async def read_from_serial_port(serial_instance):
             await asyncio.sleep(1)
 
 def get_simulated_sensor_values():
-    valparaiso_lat_base = -33.0472; valparaiso_lon_base = -71.6127
+    # Coordenadas base de Valparaíso
+    valparaiso_lat_base = -33.0472
+    valparaiso_lon_base = -71.6127
+    
+    # Generar valores simulados que coincidan con tu estructura JSON real
     return {
-        "airTemp": round(random.uniform(10.0,35.0),1),"airHumidity": round(random.uniform(30.0,90.0),1),
-        "airPressure": round(random.uniform(980.0,1030.0),1),"windSpeed": round(random.uniform(0.0,25.0),1),
-        "windDirection": random.randint(0,359),"waterPh": round(random.uniform(6.5,8.5),1),
-        "waterConductivity": random.randint(300,1200),"waterTemp": round(random.uniform(10.0,20.0),1),
-        "waterOxygen": round(random.uniform(5.0,10.0),1),
-        "gpsLatitude": round(valparaiso_lat_base+random.uniform(-0.0005,0.0005),6),
-        "gpsLongitude": round(valparaiso_lon_base+random.uniform(-0.0005,0.0005),6),
-        "gpsAltitude": round(random.uniform(5.0,15.0),1),"gpsSog": round(random.uniform(0.0,3.0),1),
-        "gpsCog": random.randint(0,359),"gpsSatellites": random.randint(4,12),
-        "imuAccelX": round(random.uniform(-2.0,2.0),2),"imuAccelY": round(random.uniform(-2.0,2.0),2),
-        "imuAccelZ": round(random.uniform(8.8,10.8),2),"imuGyroX": round(random.uniform(-30.0,30.0),2),
-        "imuGyroY": round(random.uniform(-30.0,30.0),2),"imuGyroZ": round(random.uniform(-30.0,30.0),2)
+        # Grupo 1: Inerciales (a) - Acelerómetro (en g)
+        "a": [
+            round(random.uniform(-2.0, 2.0), 5),  # ax
+            round(random.uniform(-2.0, 2.0), 5),  # ay
+            round(random.uniform(8.8, 10.8), 5)    # az (incluye gravedad)
+        ],
+        
+        # Grupo 2: Orientación (o) - Ángulos en grados
+        "o": [
+            round(random.uniform(-180, 180), 2),   # roll
+            round(random.uniform(-90, 90), 2),     # pitch
+            round(random.uniform(0, 360), 2)       # yaw
+        ],
+        
+        # Grupo 3: Posición (p) - GPS
+        "p": [
+            round(valparaiso_lat_base + random.uniform(-0.0005, 0.0005), 6),  # lat
+            round(valparaiso_lon_base + random.uniform(-0.0005, 0.0005), 6),  # lon
+            round(random.uniform(0, 3.0), 2)                                  # speed (km/h)
+        ],
+        
+        # Grupo 4: Ambiente (e) - BME280 + SHT31
+        "e": [
+            round(random.uniform(10.0, 35.0), 2),  # bme_temp
+            round(random.uniform(30.0, 90.0), 2),   # bme_hum
+            round(random.uniform(980.0, 1030.0), 2), # bme_pres
+            round(random.uniform(10.0, 35.0), 2),   # air_temp (SHT31)
+            round(random.uniform(30.0, 90.0), 2)    # air_hum (SHT31)
+        ],
+        
+        # Grupo 5: Agua (w) - Sensores acuáticos + viento
+        "w": [
+            round(random.uniform(0.0, 25.0), 2),    # wind_mps
+            random.randint(0, 359),                 # wind_dir_deg
+            round(random.uniform(5.0, 10.0), 2),    # do_mgl
+            random.randint(300, 1200),              # tds_ppm
+            round(random.uniform(10.0, 20.0), 2),   # water_temp
+            round(random.uniform(6.5, 8.5), 2)      # ph
+        ],
+        
+        # Campos adicionales (opcionales para debug)
+        "meta": {
+            "simulation": True,
+            "timestamp": datetime.datetime.utcnow().isoformat()
+        }
     }
 
 async def simulate_data_periodically():
