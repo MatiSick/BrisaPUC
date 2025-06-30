@@ -7,6 +7,13 @@ import time
 import traceback
 from pathlib import Path # Para manejar rutas de archivos
 from aiohttp import web # <--- IMPORTANTE: Importar aiohttp
+from motor.motor_asyncio import AsyncIOMotorClient # pip install motor pymongo
+from datetime import datetime
+
+# --- Configuración MongoDB ---
+MONGODB_URI = "mongodb://localhost:27017"  # Cambia si tu MongoDB está en otro servidor
+MONGODB_DB_NAME = "telemetria_boya"
+MONGODB_COLLECTION_NAME = "datos_sensores"
 
 # --- Configuración General ---
 USE_SIMULATED_DATA = False  # CAMBIA ESTO: True para simular, False para usar el puerto serie
@@ -34,6 +41,11 @@ SIMULATION_INTERVAL = 1.0
 clients = set()
 if USE_SIMULATED_DATA:
     random.seed(time.time())
+    
+# --- Variables Globales ---
+mongo_client = None
+db = None
+
 
 async def register_client(websocket):
     clients.add(websocket)
@@ -103,8 +115,17 @@ async def read_from_serial_port(serial_instance):
                 try:
                     decoded_line = line_bytes.decode('utf-8').strip()
                     if not decoded_line: continue
-                    # print(f"Datos desde serial: {decoded_line}") # Descomentar para debug
+                    
+                    # Parseamos y guardamos datos en MongoDB
+                    try: 
+                        data_dict = json.loads(decoded_line)
+                        await save_to_mongodb(data_dict)
+                    except json.JSONDecodeError:
+                        print(f"Error parseando JSON: {decoded_line}")
+                                            
+                    # Enviamos a todos los clientes WebSocket
                     await send_to_all_clients(decoded_line)
+
                 except UnicodeDecodeError:
                     print(f"Error de decodificación Unicode: {line_bytes}. Saltando.")
                 except Exception as e:
@@ -146,7 +167,10 @@ async def simulate_data_periodically():
         try:
             simulated_data = get_simulated_sensor_values()
             json_payload = json.dumps(simulated_data)
-            # print(f"Datos simulados: {json_payload}") # Descomentar para debug
+            
+            # Guardamos datos en mongoDB
+            await save_to_mongodb(simulated_data)
+            
             await send_to_all_clients(json_payload)
             await asyncio.sleep(SIMULATION_INTERVAL)
         except Exception as e:
@@ -171,8 +195,29 @@ async def handle_html_route(request): # Cambiado el nombre para evitar conflicto
         traceback.print_exc()
         return web.Response(text="Error interno del servidor al servir la página.", status=500)
 
+# --- Configuración de MongoDB ---
+async def save_to_mongodb(data_dict):
+    """
+    Guarda los datos en MongoDB y añade un timestamp
+    """
+    try:
+        # Añadir timestamp de inserción
+        data_with_timestamp = {
+            **data_dict,
+            "timestamp": datetime.utcnow()
+        }
+        
+        result = await db[MONGODB_COLLECTION_NAME].insert_one(data_with_timestamp)
+        print(f"Dato guardado en MongoDB, ID: {result.inserted_id}")
+        return True
+    except Exception as e:
+        print(f"Error al guardar en MongoDB: {e}")
+        traceback.print_exc()
+        return False
+
 # --- Función Principal Modificada ---
 async def main():
+    global mongo_client, db
     # Configurar aplicación aiohttp para el servidor HTTP
     http_app = web.Application()
     http_app.router.add_get('/', handle_html_route) # Servir HTML_FILENAME en la ruta raíz '/'
@@ -191,6 +236,12 @@ async def main():
     websocket_server_instance = None # Para poder cerrarlo en finally
 
     try:
+        # Iniciar mongoDB
+        print(f"Conectando a MongoDB en {MONGODB_URI}...")
+        mongo_client = AsyncIOMotorClient(MONGODB_URI)
+        db = mongo_client[MONGODB_DB_NAME]
+        print(f"Conectado a MongoDB. Base de datos: {MONGODB_DB_NAME}, Colección: {MONGODB_COLLECTION_NAME}")
+        
         # Iniciar servidor HTTP
         await http_site.start()
         print(f"Servidor HTTP iniciado. Accede en: http://{HTTP_HOST}:{HTTP_PORT}")
